@@ -15,14 +15,14 @@ data_loaders = DataLoaders(data_file)
 
 # %%
 
-inner_channels = 128
+inner_channels = 256
 model = TransNet(inner_channels)
 model.cuda()
 criterion = nn.MSELoss()
 
 # %%
 
-batch_size = 2 ** 9
+batch_size = 2 ** 8
 
 train_loader, val_loader = data_loaders.get_data_loaders(batch_size=batch_size,
                                                          train_frac=0.9,
@@ -33,7 +33,7 @@ mini_loaders = data_loaders.get_data_loaders(batch_size=batch_size,
                                              val_frac=0.005)
 mini_train_loader, mini_val_loader = mini_loaders
 
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=0.1)
 
 checkin = int(50000 / batch_size)
@@ -96,7 +96,7 @@ for epoch in range(100):
             plt.show()
             if val_metrics.mae < best_mae:
                 torch.save(model.state_dict(),
-                           'trained_models/best_v2_'+str(inner_channels)+'.pth')
+                           'trained_models/best_v3_'+str(inner_channels)+'.pth')
                 best_mae = val_metrics.mae
             model.train()
         ti = time.time()

@@ -3,9 +3,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 from sklearn.metrics import r2_score, mean_absolute_error
-from xyznet.data import DataLoaders
-from xyznet.model import XyzConv
-from xyznet.utils import evaluate, EvalTrain
+from transnet.data import DataLoaders
+from transnet.model import TransNet
+from transnet.utils import evaluate, EvalTrain
 
 train = False
 
@@ -15,8 +15,9 @@ else:
     data_file = 'data/processed_test.npz'
 
 trained_folder = 'trained_models/'
-model_path = 'best32.pth'
-inner_channels = int(model_path[4:-4])
+model_path = 'best_v2_32.pth'
+inner_channels = 32
+#inner_channels = int(model_path[4:-4])
 
 batch_size = 2 ** 10
 data_loaders = DataLoaders(data_file)
@@ -24,7 +25,7 @@ data_loaders = DataLoaders(data_file)
 prediction_loader = data_loaders.get_data_loaders(batch_size=batch_size,
                                                   inference=True)
 
-model = XyzConv(inner_channels)
+model = TransNet(inner_channels)
 model.load_state_dict(torch.load(trained_folder + model_path))
 model.cuda()
 
@@ -56,7 +57,7 @@ else:
     submission = pd.concat([df_test['id'],
                            prediction['scalar_coupling_constant']], axis=1)
 
-    submission.to_csv('data/submission.gz',
+    submission.to_csv('data/submission2.gz',
                       index=False,
                       header=True,
                       compression='gzip')

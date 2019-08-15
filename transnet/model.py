@@ -27,8 +27,7 @@ class TransformerBlock(nn.Module):
             k = self.w_k(x)
             v = self.w_v(x)
             k_t = torch.transpose(k, dim0=1, dim1=2)
-            soft = self.softmax(torch.matmul(q, k_t) /
-                                np.sqrt(q.shape[-1]))
+            soft = self.softmax(torch.matmul(q, k_t) / 8)
             z = torch.matmul(soft, v)
             z_list.append(z)
         z = torch.cat(z_list, dim=2)
@@ -60,14 +59,11 @@ class TransNet(nn.Module):
 
         self.transformerblocks = nn.ModuleList([TransformerBlock(self.channels,
                                                                  dim=64,
-                                                                 heads=8)
-                                               for _ in range(6)])
+                                                                 heads=4)
+                                               for _ in range(3)])
 
         self.leaky = nn.LeakyReLU()
         self.sigmoid = nn.Sigmoid()
-        self.tanh = nn.Tanh()
-        self.in1 = nn.InstanceNorm1d(self.channels)
-        self.softplus2 = nn.Softplus()
 
     def forward(self, elem_vec, relative_pos, data_id):
         # elem_feat block

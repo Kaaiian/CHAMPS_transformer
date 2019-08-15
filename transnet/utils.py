@@ -54,7 +54,6 @@ class Metrics():
         self.mae_sum = 0
         self.mae_avg = 0
 
-
     def update(self, y_act, y_pred):
         self.n += 1
         self.r2 = r2_score(y_act, y_pred)
@@ -65,6 +64,9 @@ class Metrics():
         self.mae_avg = self.mae_sum / self.n
         self.r2_list.append(self.r2)
         self.mae_list.append(self.mae)
+        if len(self.r2_list) > 1000:
+            self.r2_list = self.r2_list[-500:]
+            self.mae_list = self.mae_list[-500:]
 
     def show(self):
         r2_str = ' {:<9} {:0.3f} ({:0.3f})\n'.format('r2:',
