@@ -13,7 +13,8 @@ class TransformerBlock(nn.Module):
         self.softmax = nn.Softmax(dim=2).to(device)
         self.layernorm = nn.LayerNorm(self.tchannels)
 
-        self.linear = nn.Linear(self.tchannels, self.tchannels)
+        self.linear1 = nn.Linear(self.tchannels, self.tchannels)
+        self.linear2 = nn.Linear(self.tchannels, self.tchannels)
         self.w_q = nn.Linear(self.tchannels, self.dim)
         self.w_k = nn.Linear(self.tchannels, self.dim)
         self.w_v = nn.Linear(self.tchannels, self.dim)
@@ -32,24 +33,24 @@ class TransformerBlock(nn.Module):
             z_list.append(z)
         z = torch.cat(z_list, dim=2)
         z = self.w_o(z)
-        r0 = self.linear(z)
+        r0 = self.linear1(z)
         r0 = x + r0
         r1 = self.layernorm(r0)
-        r1 = self.linear(r1)
+        r1 = self.linear2(r1)
         r = r0 + r1
         r = self.layernorm(r)
         return r
 
 
-class XyzConv(nn.Module):
+class TransNet(nn.Module):
     """
     Convolutional operation on graphs
     """
     def __init__(self, inner_channels):
-        super(XyzConv, self).__init__()
+        super(TransNet, self).__init__()
         self.channels = inner_channels
 
-        self.elem_in = nn.Linear(6, self.channels)
+        self.elem_in = nn.Linear(14, self.channels)
         self.elem_int = nn.Linear(self.channels, self.channels)
 
         self.dist_in = nn.Linear(6, self.channels)
@@ -58,9 +59,9 @@ class XyzConv(nn.Module):
         self.linear_final = nn.Linear(self.channels * 29 * 2, 1)
 
         self.transformerblocks = nn.ModuleList([TransformerBlock(self.channels,
-                                                                 dim=32,
-                                                                 heads=4)
-                                               for _ in range(3)])
+                                                                 dim=64,
+                                                                 heads=8)
+                                               for _ in range(6)])
 
         self.leaky = nn.LeakyReLU()
         self.sigmoid = nn.Sigmoid()
@@ -68,7 +69,7 @@ class XyzConv(nn.Module):
         self.in1 = nn.InstanceNorm1d(self.channels)
         self.softplus2 = nn.Softplus()
 
-    def forward(self, elem_vec, relative_pos):
+    def forward(self, elem_vec, relative_pos, data_id):
         # elem_feat block
         x_elem = self.elem_in(elem_vec)
         x_elem = self.leaky(x_elem)
@@ -80,8 +81,6 @@ class XyzConv(nn.Module):
         x_dist = self.dist_int(x_dist)
         x_dist = self.leaky(x_dist)
 
-#        x = x_elem * x_dist
-
         x = torch.cat([x_dist, x_elem], dim=2)
 
         for block in self.transformerblocks:
@@ -89,4 +88,4 @@ class XyzConv(nn.Module):
 
         x = self.linear_final(x.view(-1, 29 * self.channels * 2))
 
-        return x
+        return x, data_id

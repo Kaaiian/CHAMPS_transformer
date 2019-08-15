@@ -1,4 +1,3 @@
-import pandas as pd
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -7,16 +6,28 @@ from numba import jit
 
 class DataLoaders():
     def __init__(self, data_file):
-        self.data = pd.read_csv(data_file, header=None)
+        self.data = np.load(data_file)['arr_0']
 
-    def get_data_loaders(self, batch_size=1, train_frac=0.025, val_frac=0.01):
+    def get_data_loaders(self,
+                         batch_size=1,
+                         train_frac=0.025,
+                         val_frac=0.01,
+                         inference=False):
         '''
         input the dataset, get train test split
         '''
+        if inference:
+            prediction_dataset = XyzData(self.data)
+            prediction_loader = DataLoader(prediction_dataset,
+                                           batch_size=batch_size,
+                                           pin_memory=True,
+                                           shuffle=False)
+            return prediction_loader
+
         train_size = int(self.data.shape[0] * train_frac)
         val_size = int(self.data.shape[0] * val_frac)
-        train_dataset = XyzData(self.data.iloc[:train_size, :])
-        val_dataset = XyzData(self.data.iloc[-val_size:, :])
+        train_dataset = XyzData(self.data[:train_size, :])
+        val_dataset = XyzData(self.data[-val_size:, :])
         train_loader = DataLoader(train_dataset,
                                   batch_size=batch_size,
                                   pin_memory=True,
@@ -79,14 +90,15 @@ def rel_loops(sites, n_elems, idx1, idx2):
 @jit(nopython=True)
 def get_sites(molecule):
     target = molecule[-1]
+    data_id = molecule[-2]
+    coupling_type = int(molecule[-3])
     elems = molecule[:29]
     sites = molecule[29:4 * 29]
-    idx1 = int(molecule[-4])
-    idx2 = int(molecule[-3])
+    idx1 = int(molecule[-5])
+    idx2 = int(molecule[-4])
 
     # remove the filler 'dummy' elements
     n_elems = 29
-#    n_elems = elems.argmin()
     elems = elems[0:n_elems]
     sites = sites[0:n_elems * 3]
     sites = np.concatenate((elems, sites))
@@ -100,7 +112,11 @@ def get_sites(molecule):
     coupling_pairs = np.zeros(shape=(n_elems, 1))
     coupling_pairs[idx1, :] = 1
     coupling_pairs[idx2, :] = 1
-    elem_vec = np.concatenate((one_hot_elems, coupling_pairs), axis=1)
+    coupling_types = np.zeros(shape=(n_elems, 8))
+    coupling_types[idx1, coupling_type] = 1
+    coupling_types[idx2, coupling_type] = 1
+    elem_props = (one_hot_elems, coupling_pairs, coupling_types)
+    elem_vec = np.concatenate(elem_props, axis=1)
 
     # get positions relative to center between indices
     relative_pos = np.ones(shape=(n_elems, 2))
@@ -108,7 +124,7 @@ def get_sites(molecule):
                              n_elems,
                              idx1,
                              idx2)
-    return elem_vec, relative_pos, target
+    return elem_vec, relative_pos, data_id, target
 
 
 class XyzData(Dataset):
@@ -116,7 +132,7 @@ class XyzData(Dataset):
     this is kaai's dataset
     """
     def __init__(self, dataset):
-        self.data = dataset.values
+        self.data = dataset
 
     def __len__(self):
         return self.data.shape[0]
@@ -124,7 +140,7 @@ class XyzData(Dataset):
     def __getitem__(self, idx):
         molecule = self.data[idx, :]
         # get position information using numba functions
-        elem_vec, relative_pos, target = get_sites(molecule)
+        elem_vec, relative_pos, data_id, target = get_sites(molecule)
         # sort molecules by proximity to center
         sort_index = relative_pos.argsort()[0]
         relative_pos = relative_pos.transpose()[sort_index]
@@ -133,4 +149,4 @@ class XyzData(Dataset):
         elem_vec = torch.Tensor(elem_vec)
         relative_pos = torch.Tensor(relative_pos)
         target = torch.Tensor([float(target)])
-        return (elem_vec, relative_pos, target)
+        return (elem_vec, relative_pos, data_id, target)
