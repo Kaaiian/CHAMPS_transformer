@@ -3,7 +3,27 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import torch
 from torch.autograd import Variable
-from sklearn.metrics import r2_score, mean_absolute_error
+from sklearn.metrics import r2_score, mean_absolute_error, roc_curve, auc
+
+
+def plot_roc_curve(y, y_pred_score, label=None):
+    fpr, tpr, _ = roc_curve(y, y_pred_score)
+    roc_auc = auc(fpr, tpr)
+    # plt.figure()
+    lw = 2
+    line_color = 'darkorange'
+    styling = '-'
+    if label == 'val':
+        line_color = 'grey'
+        styling = ':'
+    plt.plot(fpr, tpr, color=line_color, linestyle=styling,
+             lw=lw, label=f'{label} (AUC={roc_auc:0.2f})')
+    plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.legend(loc="lower right")
 
 
 def evaluate(model, data_loader, inference=False):
@@ -11,15 +31,16 @@ def evaluate(model, data_loader, inference=False):
     y_pred = []
     data_ids = []
     model.eval()
-    for i, (model_args) in enumerate(data_loader):
-        elem_vec, relative_pos, data_id, target = model_args
-        elem_vec = Variable(elem_vec.cuda(non_blocking=True))
-        relative_pos = Variable(relative_pos.cuda(non_blocking=True))
-        output, ids = model(elem_vec, relative_pos, data_id)
+    print('running eval')
+    for i, model_args in enumerate(data_loader):
+        site_vec, target, mol_id = model_args
+        site_vec = Variable(site_vec.cuda(non_blocking=True))
+        target = Variable(target.cuda(non_blocking=True))
+        output, _ = model(site_vec, mol_id)
         y = torch.Tensor(target)
-        y_pred += output.detach().cpu().numpy().tolist()
+        y_pred += sigmoid(output).detach().cpu().numpy().tolist()
         y_act += y.detach().numpy().tolist()
-        data_ids += ids.detach().numpy().tolist()
+        mol_id += ids.detach().numpy().tolist()
         if inference:
             if i % int(len(data_loader)/10) == 0:
                 percent = i/len(data_loader) * 100
@@ -128,5 +149,9 @@ class EvalTrain():
         plt.show()
         mean_lmae = np.array(list(self.all_lmae.values())).mean()
         return mean_lmae
+
+
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters()if p.requires_grad)
 
 
